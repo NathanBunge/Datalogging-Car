@@ -1,0 +1,273 @@
+import pandas as pd
+import numpy as np 
+import plotly.express as px
+
+
+
+def read_files(filename):
+    data = pd.read_csv(filename, encoding = "ISO-8859-1")
+    
+    df = pd.DataFrame(data)
+    df = df.set_axis(['Time', "AF_Corr", "AF_Learn", "AFR", "Boost", "Load", "FuelFinal", "DAM","FeedbackKnock", "FKL", "MPG", "FuelLevel", "FuelTemp", "IgnitionTime", 
+                      "DutyCycle", "IntakeTemp", "MAF", "MAF_Volt", "RPM", "BoostError", "Throttle", 
+                     "MPH", "WG", "Name"], axis = 1)
+
+    return df
+    
+    
+def get_basic(pull_num, set_num):
+    filename = "Data" + str(set_num) + "/datalog" + str(pull_num) + ".csv"
+    data = read_files(filename)
+    if set_num == 1:
+        data["Number"] = pull_num
+    else:
+        data["Number"] = pull_num + set_num * 10
+    
+    return data 
+
+def plot_all(df_array):
+    full = pd.concat(df_array)
+
+    fig = px.line(full, x='Time', y='RPM', color="Number", markers=True)
+    fig.show()
+
+
+def get_dataFrame(pull_num, set_num):
+    filename = "Data" + str(set_num) + "/datalog" + str(pull_num) + ".csv"
+    data = read_files(filename)
+    
+    past = 5
+    future = 50
+
+    #filter data where pull occured
+    #pull = data[data.Throttle == 100 or ]
+    #pull = pull.reset_index()
+    
+    #get row where throttle positoin is 100 (start of pull)
+    row_numbers = data[data.Throttle == 100].index
+    start_index = min(row_numbers)
+    
+    
+    #select 6 rows before, and then 30 rows after
+    pull = data.iloc[start_index+past:start_index+future]
+    pull = pull.reset_index()
+    
+    #print(pull)
+    #center time data so seconds=0 when pull startswith
+    startTime = pull.loc[0+past, "Time"]
+    for i in range(len(pull)):
+        pull.loc[i, "Time"] = pull.loc[i, "Time"] - startTime
+
+
+    #center rpm data so all rmp starts at 3k?
+    start_rmp = pull.loc[0+past, "RPM"]
+    diff = 3000 - start_rmp
+    for i in range(len(pull)):
+        pull.loc[i, "RPM"] = pull.loc[i, "RPM"] + diff
+
+    if set_num == 1:
+        pull["Number"] = pull_num
+    else:
+        pull["Number"] = pull_num + set_num * 10
+
+    print(pull.head(1))
+    return pull
+    
+
+#old version of get_dtaframe. Used to show how data was centered
+def get_time_centered(pull_num, set_num):
+    filename = "Data" + str(set_num) + "/datalog" + str(pull_num) + ".csv"
+    data = read_files(filename)
+    
+    past = 5
+    future = 50
+
+    #filter data where pull occured
+    #pull = data[data.Throttle == 100 or ]
+    #pull = pull.reset_index()
+    
+    #get row where throttle positoin is 100 (start of pull)
+    row_numbers = data[data.Throttle == 100].index
+    start_index = min(row_numbers)
+    
+    
+    #select 6 rows before, and then 30 rows after
+    pull = data.iloc[start_index+past:start_index+future]
+    pull = pull.reset_index()
+    
+    #print(pull)
+    #center time data so seconds=0 when pull startswith
+    startTime = pull.loc[0+past, "Time"]
+    for i in range(len(pull)):
+        pull.loc[i, "Time"] = pull.loc[i, "Time"] - startTime
+
+
+    if set_num == 1:
+        pull["Number"] = pull_num
+    else:
+        pull["Number"] = pull_num + set_num * 10
+
+    print(pull.head(1))
+    return pull
+    
+
+    
+def getSpeed(full_df):
+    df = full_df[["Time", "RPM"]]
+    df["points"] = np.arange(len(df))
+    print(df)
+
+
+    return df
+    
+    
+def getAverage(df_array):
+    #add index column first so we can group by items
+    for df in df_array:
+        df['points'] = np.arange(len(df))
+        
+    #combind into on e big dataframe so we can group by
+    full = pd.concat(df_array)
+
+    full = full.groupby('points').mean()
+    
+    for ind in full.index:
+        #get first set of pull groupings
+        if full['Number'][ind] < 20:
+            #reassing lable to first grouping
+            full['Number'][ind] = 1
+        elif (20 <= full['Number'][ind] < 30):
+            #reassing lable to second grouping
+            full['Number'][ind] = 2
+    
+    print(full)
+    
+    return full
+
+
+def pullGraph(df_array):
+    full = pd.concat(df_array)
+
+    fig = px.line(full, x='Time', y='RPM', color="Number", markers=True,
+                labels={
+                     "Time": "Time in Seconds",
+                     "RPM": "Engine Rotations per Second",
+                     "Number": "Pull number or grouping number"
+                 },)
+    fig.add_vline(x=0)   #start of pulls
+    fig.add_vline(x=3.12) #set from the first end of pulls
+    fig.show()
+
+def healthGraph(df_array, param, min_ideal, max_ideal, ideal_range, titleName, yTitle):
+    full = pd.concat(df_array)
+    fig = px.line(full, x='Time', y=param, color="Number", markers=True, title=titleName,
+            labels={
+                     "Time": "Time in Seconds",
+                     param: yTitle,
+                     "Number": "Pull number or grouping number"
+                 },
+    )
+    fig.add_vline(x=0)   #start of pulls
+    fig.add_vline(x=3.12) #set from the first end of pulls
+    #fig.add_hrect(y0=min_ideal, y1=max_ideal, x0=0, x1=3.12, line_width=1, fillcolor="green", opacity=0.2)
+    fig.update_layout(font_size= 20)
+    fig.update_layout(legend_title_font_size= 15)
+    
+    if not ideal_range:
+        fig.add_shape(type="rect", x0=0, x1=3.12, y0=min_ideal, y1=max_ideal, line=dict(color="green", width=3), fillcolor= "green",opacity= 0.2)
+    
+    if ideal_range:
+        for i in range(100):
+            fig.add_shape(type='line',
+            xref="x",
+            yref="y",
+            x0=0,
+            x1=3.12,
+            y0=i*(min_ideal/100)+max_ideal,
+            y1=i*(min_ideal/100)+max_ideal,
+            line=dict(
+                        color='rgba({}, {}, {}, {})'.format((i/100*255),(255),(0), (.05)),
+                        width=(max_ideal-min_ideal)*22.5
+                    ))
+    fig.show()
+
+def plotRollingMean(df_array, windowTime):
+
+    #getting the rolling mean for the full drives (time period = 100 secs)
+    roll_mean = [drive.rolling(window=windowTime).mean() for drive in df_array]
+    roll_std = [drive.rolling(window=windowTime).std() for drive in df_array]
+
+    plot_all(roll_mean)
+
+#plots all the health graphs
+def plotAllHeath(df_array):
+    healthGraph(df_array, "IgnitionTime", 0, 0, 0, "Ideal Ignition Timing", "IgnitionTime (degrees before top dead center)")
+    healthGraph(df_array, "DAM", 15.95, 16.05, 0, "Ideal Dynamic Additive Multiplier", "DAM")
+    healthGraph(df_array, "Boost", 11, 16.5,0, "Ideal Boost values", "Boost (psi)")
+    healthGraph(df_array, "FeedbackKnock", -4, 0, 1, "Ideal Feedback Knock", "Feedback Knock (Degrees delayed)")
+    healthGraph(df_array, "AF_Learn", -10, 10, 0, "Ideal Air/Fuel Radio", "Air/Fuel")
+    healthGraph(df_array, "BoostError", -1, 1, 0, "Ideal Boost Error", "Target Boost (psi) - Actual Boost (psi)")
+
+
+
+
+def getPulls():
+    #this has to be hard coded becuase not every dataset is a pull and therefore not every one is used
+    p =[get_dataFrame(8,1), get_dataFrame(9,1), get_dataFrame(12,1), get_dataFrame(13,1), 
+    get_dataFrame(15,1), get_dataFrame(16,1), get_dataFrame(17,1), get_dataFrame(18,1),
+    get_dataFrame(4,2), get_dataFrame(5,2), get_dataFrame(6,2), get_dataFrame(7,2), get_dataFrame(8,2)]
+    
+    return p
+
+def getFullDrive():
+    p = [get_basic(8,1), get_basic(9,1), get_basic(12,1), get_basic(13,1), 
+    get_basic(15,1), get_basic(16,1), get_basic(17,1), get_basic(18,1),
+    get_basic(4,2), get_basic(5,2), get_basic(6,2), get_basic(7,2), get_basic(8,2)]
+    
+    return p
+
+def getPartCenter():
+    p = [get_time_centered(8,1), get_time_centered(9,1), get_time_centered(12,1), get_time_centered(13,1), 
+    get_time_centered(15,1), get_time_centered(16,1), get_time_centered(17,1), get_time_centered(18,1),
+    get_time_centered(4,2), get_time_centered(5,2), get_time_centered(6,2), get_time_centered(7,2), get_time_centered(8,2)]
+
+    return p
+
+
+
+
+
+#plot data without wranggling
+full_drive = getFullDrive()
+plot_all(full_drive)
+
+#plot time centered data
+part_centered = getPartCenter()
+plot_all(part_centered)
+
+#plot data after all wrangling
+pulls = getPulls()
+plot_all(pulls)
+
+
+
+
+#get averages
+avg_df_1 = getAverage(pulls[:8])
+avg_df_2 = getAverage(pulls[8:])
+avg_pulls = [avg_df_1, avg_df_2]
+#sent fo function to plot
+pullGraph(avg_pulls)
+
+#get full data
+full_pulls = [x for x in pulls]
+#send to function to plot
+pullGraph(full_pulls)
+
+#plot rolling averages
+plotRollingMean(full_drive, 100)
+
+
+#plot health graph
+
+
