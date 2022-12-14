@@ -1,3 +1,3 @@
 # Datalogging_WRX
 
-test first commit
+Run datalog.py to produce interactable graphs
