@@ -293,7 +293,7 @@ plotRollingMean(avg_pulls, 12)
 
 
 #plot health graph
-plotAllHeath(avg_pulls)
+plotAllHeath()
 
 
 
