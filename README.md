@@ -1,4 +1,4 @@
-# Datalogging_WRX
+# Datalogging Car
 
 Run datalog.py to produce interactable graphs
 
